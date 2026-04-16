@@ -141,18 +141,6 @@ mvn spring-boot:run
 
 ---
 
-## 📡 API Endpoints (Sample)
-
-| Method | Endpoint             | Description            | Role Required |
-| ------ | -------------------- | ---------------------- | ------------- |
-| POST   | /api/auth/register   | Register user          | Public        |
-| POST   | /api/auth/login      | Login user             | Public        |
-| GET    | /api/admin/users     | Get all users          | ADMIN         |
-| GET    | /api/doctor/patients | View assigned patients | DOCTOR        |
-| POST   | /api/patient/book    | Book appointment       | PATIENT       |
-
----
-
 ## 🧪 Testing
 
 * Unit Testing using JUnit

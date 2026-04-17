@@ -28,7 +28,7 @@ public class AdminController {
     }
 
     @GetMapping("/patients")
-    public ResponseEntity<List<PatientResponseDto>> getAllPatients(
+    public ResponseEntity<Page<PatientResponseDto>> getAllPatients(
             @RequestParam(defaultValue = "0") int pageNumber,
             @RequestParam(defaultValue = "3") int pageSize
     ){

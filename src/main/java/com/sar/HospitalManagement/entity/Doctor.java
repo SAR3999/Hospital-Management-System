@@ -34,9 +34,6 @@ public class Doctor {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(nullable = false)
-    private String occupation;
-
     @Column(nullable = false, length = 50)
     private String specialization;
 

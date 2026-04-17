@@ -1,52 +1,153 @@
 package com.sar.HospitalManagement.service;
 
+import com.sar.HospitalManagement.dto.AppointmentResponseDto;
+import com.sar.HospitalManagement.dto.CreateAppointmentRequestDto;
 import com.sar.HospitalManagement.entity.Appointment;
 import com.sar.HospitalManagement.entity.Doctor;
 import com.sar.HospitalManagement.entity.Patient;
+import com.sar.HospitalManagement.entity.User;
+import com.sar.HospitalManagement.entity.type.AppointmentStatusType;
 import com.sar.HospitalManagement.repository.AppointmentRepository;
+import com.sar.HospitalManagement.repository.DoctorAvailabilityRepository;
 import com.sar.HospitalManagement.repository.DoctorRepository;
 import com.sar.HospitalManagement.repository.PatientRepository;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class AppointmentService {
-    private AppointmentRepository appointmentRepository;
-    private PatientRepository patientRepository;
-    private DoctorRepository doctorRepository;
+    private final AppointmentRepository appointmentRepository;
+    private final PatientRepository patientRepository;
+    private final DoctorRepository doctorRepository;
+    private final ModelMapper modelMapper;
+    private final DoctorAvailabilityRepository doctorAvailabilityRepository;
 
-    @Autowired
-    public AppointmentService(AppointmentRepository appointmentRepository, PatientRepository patientRepository, DoctorRepository doctorRepository) {
-        this.appointmentRepository = appointmentRepository;
-        this.patientRepository = patientRepository;
-        this.doctorRepository = doctorRepository;
+    @Transactional
+    @PreAuthorize("hasRole('PATIENT')")
+    public AppointmentResponseDto createNewAppointment(CreateAppointmentRequestDto dto){
+        User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
+        Patient patient = patientRepository.findById(user.getId())
+                .orElseThrow(() -> new EntityNotFoundException("Patient not found"));
+
+        Doctor doctor = doctorRepository.findById(dto.getDoctorId())
+                .orElseThrow(() -> new EntityNotFoundException("Doctor not found"));
+
+        LocalDate today = LocalDate.now();
+        Long doctorId = doctor.getId();
+        if(doctorAvailabilityRepository.existsByDoctorIdAndUnavailableDate(doctorId, today)){
+            throw new RuntimeException("Doctor is not available on this date");
+        }
+
+        Integer lastToken = appointmentRepository
+                .findMaxToken(doctor.getId(), today);
+
+        int newToken = lastToken + 1;
+
+        Appointment appointment = Appointment.builder()
+                .doctor(doctor)
+                .patient(patient)
+                .appointmentDate(today)
+                .tokenNumber(newToken)
+                .status(AppointmentStatusType.SCHEDULED)
+                .reason(dto.getReason())
+                .build();
+
+        return modelMapper.map(appointmentRepository.save(appointment), AppointmentResponseDto.class);
+    }
+
+    @PreAuthorize("""
+    hasRole('ADMIN') OR
+    (hasRole('DOCTOR') AND #doctorId == authentication.principal.id) OR
+    hasRole('PATIENT')
+    """)
+    public List<AppointmentResponseDto> getQueue(Long doctorId){
+
+        List<Appointment> list = appointmentRepository
+                .findByDoctorIdAndAppointmentDateOrderByTokenNumberAsc(
+                        doctorId, LocalDate.now()
+                );
+
+        return list.stream()
+                .map(a -> modelMapper.map(a, AppointmentResponseDto.class))
+                .toList();
+    }
+
+    @PreAuthorize("hasRole('PATIENT')")
+    public Integer getMyPosition(Long appointmentId){
+
+        User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new IllegalArgumentException("Appointment not found."));
+
+        if(!appointment.getPatient().getId().equals(user.getId())){
+            throw new RuntimeException("Unauthorized access");
+        }
+
+        List<Appointment> queue = appointmentRepository
+                .findByDoctorIdAndAppointmentDateOrderByTokenNumberAsc(
+                        appointment.getDoctor().getId(),
+                        LocalDate.now()
+                );
+
+        for(int i=0;i<queue.size();i++){
+            if(queue.get(i).getId().equals(appointmentId)){
+                return i+1;
+            }
+        }
+
+        return -1;
     }
 
     @Transactional
-    public Appointment createNewAppointment(Appointment appointment, Long patientId, Long doctorId){
-        Doctor doctor = doctorRepository.findById(doctorId).orElseThrow(() -> new EntityNotFoundException("Doctor with doctor id is not stored in our system"));
-        Patient patient = patientRepository.findById(patientId).orElseThrow( () -> new EntityNotFoundException("Patient with patient id is not stord in our system") );
+    @PreAuthorize("hasRole('DOCTOR')")
+    public AppointmentResponseDto updateStatus(Long appointmentId, AppointmentStatusType status){
 
-        if(appointment.getId() != null )
-            throw new IllegalArgumentException("Appointment should not have appointment id");
+        User user = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
 
-        if(appointment.getAppointmentTime().isBefore(LocalDateTime.now()))
-            throw new RuntimeException("We can't schedule appointment in the past");
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new IllegalArgumentException("Appointment not found"));
 
-        if(appointmentRepository.existsByDoctorIdAndAppointmentTime(doctor.getId(), appointment.getAppointmentTime()))
-            throw new RuntimeException("Doctor already have an appointment on this time");
+        if(!appointment.getDoctor().getId().equals(user.getId())){
+            throw new RuntimeException("You can only manage your own appointments");
+        }
 
-        appointment.setPatient(patient);
-        appointment.setDoctor(doctor);
+        appointment.setStatus(status);
 
-        // for maintaining bi-directional mapping which is used to consist the memory (not required for db)
-        patient.getAppointments().add(appointment);
-        doctor.getAppointments().add(appointment);
+        return modelMapper.map(appointment, AppointmentResponseDto.class);
+    }
 
-        return appointmentRepository.save(appointment);
+//    @Transactional
+//    @PreAuthorize("hasAuthority('appointment:write') or #doctorId == authentication.principal.id")
+//    public Appointment reAssignAppointmentToAnotherDoctor(Long appointmentId, Long doctorId) {
+//        Appointment appointment = appointmentRepository.findById(appointmentId).orElseThrow();
+//        Doctor doctor = doctorRepository.findById(doctorId).orElseThrow();
+//
+//        appointment.setDoctor(doctor); // this will automatically call the update, because it is dirty
+//
+//        doctor.getAppointments().add(appointment); // just for bidirectional consistency
+//
+//        return appointment;
+//    }
+
+    @PreAuthorize("hasRole('ADMIN') OR (hasRole('DOCTOR') AND #doctorId == authentication.principal.id)")
+    public List<AppointmentResponseDto> getAllAppointmentsOfDoctor(Long doctorId) {
+        Doctor doctor = doctorRepository.findById(doctorId).orElseThrow();
+
+        return doctor.getAppointments()
+                .stream()
+                .map(appointment -> modelMapper.map(appointment, AppointmentResponseDto.class))
+                .collect(Collectors.toList());
     }
 }

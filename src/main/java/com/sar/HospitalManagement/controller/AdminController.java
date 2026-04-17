@@ -1,16 +1,17 @@
 package com.sar.HospitalManagement.controller;
 
+import com.sar.HospitalManagement.dto.DoctorResponseDto;
+import com.sar.HospitalManagement.dto.OnBoardDoctorRequestDto;
 import com.sar.HospitalManagement.dto.PatientResponseDto;
 import com.sar.HospitalManagement.entity.Patient;
 import com.sar.HospitalManagement.service.DoctorService;
 import com.sar.HospitalManagement.service.PatientService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -32,5 +33,11 @@ public class AdminController {
             @RequestParam(defaultValue = "3") int pageSize
     ){
         return ResponseEntity.ok(patientService.getAllPatients(pageNumber,pageSize));
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/onBoardNewDoctor")
+    public ResponseEntity<DoctorResponseDto> onBoardNewDoctor(@RequestBody OnBoardDoctorRequestDto onBoardDoctorRequestDto) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(doctorService.onBoardNewDoctor(onBoardDoctorRequestDto));
     }
 }

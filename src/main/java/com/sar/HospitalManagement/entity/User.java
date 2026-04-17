@@ -2,6 +2,7 @@ package com.sar.HospitalManagement.entity;
 
 import com.sar.HospitalManagement.entity.type.AuthProviderType;
 import com.sar.HospitalManagement.entity.type.RoleType;
+import com.sar.HospitalManagement.security.RolePermisssionMapping;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.security.core.GrantedAuthority;
@@ -11,6 +12,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Getter
 @Setter
@@ -45,6 +47,8 @@ public class User implements UserDetails {
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of();
+        return roles.stream()
+                .flatMap(role -> RolePermisssionMapping.getAuthoritiesForRole(role).stream())
+                .collect(Collectors.toSet());
     }
 }

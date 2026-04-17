@@ -6,7 +6,6 @@ import lombok.Data;
 public class DoctorResponseDto {
     private Long id;
     private String name;
-    private String occupation;
     private String specialization;
     private String email;
 }

@@ -4,6 +4,7 @@ import com.sar.HospitalManagement.entity.type.AppointmentStatusType;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Builder
@@ -15,7 +16,10 @@ import java.time.LocalDateTime;
 @ToString
 @Table(
         uniqueConstraints = {
-                @UniqueConstraint(name = "unique_doctor_time" , columnNames = {"appointmentTime","doctor_id"})
+                @UniqueConstraint(
+                        name = "unique_doctor_time" ,
+                        columnNames = {"appointmentTime","doctor_id"}
+                )
         }
 )
 public class Appointment {
@@ -24,9 +28,14 @@ public class Appointment {
     private Long id;
 
     @Column(nullable = false)
+    private LocalDate appointmentDate;
+
+    @Column(nullable = false)
+    private Integer tokenNumber;
+
     private LocalDateTime appointmentTime;
 
-    @Column(nullable = true, length = 200)
+    @Column(length = 200)
     private String reason;
 
     @Enumerated(EnumType.STRING)
